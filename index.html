@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Preposition Playground 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Nunito', sans-serif;
+            background-color: #87CEEB; /* Sky blue fallback */
+            touch-action: none; /* Prevent scrolling on mobile */
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .game-title {
+            font-family: 'Fredoka One', cursive;
+            text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff, 4px 4px 8px rgba(0,0,0,0.2);
+        }
+        .instruction-text {
+            font-family: 'Fredoka One', cursive;
+            text-shadow: 1px 1px 0px #000, 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .highlight-prep {
+            color: #FFD700; /* Gold */
+            text-decoration: underline;
+            font-size: 1.2em;
+        }
+        /* Bounce animation for correct answer */
+        @keyframes bounce-in {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-bounce-in {
+            animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        /* Shake animation for wrong answer */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Game UI Overlay -->
+    <div id="ui-container" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
+        
+        <!-- Top Bar: Score and Level -->
+        <div class="flex justify-between items-start w-full max-w-4xl mx-auto">
+            <div class="bg-white/90 px-4 py-2 rounded-2xl shadow-lg border-4 border-blue-400 pointer-events-auto">
+                <span class="text-xl md:text-2xl font-bold text-blue-600">Score: <span id="score-display">0</span>/9</span>
+            </div>
+            <button id="help-btn" class="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 font-bold px-4 py-2 rounded-2xl shadow-lg border-4 border-yellow-500 pointer-events-auto transition-transform transform hover:scale-105 hidden">
+                Need Help?
+            </button>
+        </div>
+
+        <!-- Middle: Instructions / Messages -->
+        <div class="flex-grow flex items-start justify-start mt-4 ml-2 md:ml-4">
+            <div id="instruction-box" class="bg-indigo-600/90 text-white px-4 py-2 md:px-5 md:py-3 rounded-2xl shadow-xl border-2 md:border-4 border-indigo-400 text-left max-w-xs md:max-w-sm hidden transition-all duration-300">
+                <p id="instruction-message" class="instruction-text text-base md:text-lg leading-snug"></p>
+            </div>
+        </div>
+
+        <!-- Feedback Message (Correct/Wrong) -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div id="feedback-msg" class="text-5xl md:text-7xl font-bold opacity-0 transition-opacity duration-300 instruction-text text-center"></div>
+        </div>
+        
+        <!-- Bottom: Hint for controls -->
+        <div id="controls-hint" class="text-center text-white font-bold drop-shadow-md pb-4 hidden">
+            Use WASD/Arrows to walk, Space to Jump. Touch the correct ball!
+        </div>
+
+        <!-- On-Screen Controls -->
+        <div id="on-screen-controls" class="absolute bottom-4 left-4 right-4 flex justify-between pointer-events-none hidden z-20">
+            <!-- Jump Button -->
+            <button id="btn-jump" class="pointer-events-auto w-16 h-16 md:w-20 md:h-20 bg-blue-500/90 text-white rounded-full shadow-lg border-4 border-blue-300 flex items-center justify-center font-bold text-sm md:text-lg active:bg-blue-600 active:scale-95 transition-transform select-none touch-manipulation">
+                JUMP
+            </button>
+
+            <!-- D-Pad -->
+            <div class="grid grid-cols-3 gap-1 md:gap-2 pointer-events-auto select-none touch-manipulation">
+                <div></div>
+                <button id="btn-up" class="w-12 h-12 md:w-16 md:h-16 bg-white/90 rounded-xl shadow-lg border-b-4 border-gray-300 flex items-center justify-center font-bold text-xl md:text-2xl active:bg-gray-200 active:border-b-0 active:translate-y-1">↑</button>
+                <div></div>
+                <button id="btn-left" class="w-12 h-12 md:w-16 md:h-16 bg-white/90 rounded-xl shadow-lg border-b-4 border-gray-300 flex items-center justify-center font-bold text-xl md:text-2xl active:bg-gray-200 active:border-b-0 active:translate-y-1">←</button>
+                <button id="btn-down" class="w-12 h-12 md:w-16 md:h-16 bg-white/90 rounded-xl shadow-lg border-b-4 border-gray-300 flex items-center justify-center font-bold text-xl md:text-2xl active:bg-gray-200 active:border-b-0 active:translate-y-1">↓</button>
+                <button id="btn-right" class="w-12 h-12 md:w-16 md:h-16 bg-white/90 rounded-xl shadow-lg border-b-4 border-gray-300 flex items-center justify-center font-bold text-xl md:text-2xl active:bg-gray-200 active:border-b-0 active:translate-y-1">→</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 bg-blue-500 flex items-center justify-center z-50 transition-opacity duration-500">
+        <div class="bg-white p-8 md:p-12 rounded-3xl shadow-2xl max-w-lg text-center border-8 border-blue-300">
+            <h1 class="game-title text-5xl md:text-6xl text-blue-500 mb-6">Preposition Playground</h1>
+            <p class="text-xl text-gray-700 font-bold mb-8">Learn English words like IN, ON, and UNDER!</p>
+            <div class="flex justify-center space-x-4 mb-8">
+                <!-- Decorative CSS elements -->
+                <div class="w-12 h-12 bg-red-500 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
+                <div class="w-12 h-12 bg-green-500 rounded-full animate-bounce" style="animation-delay: 0.2s;"></div>
+                <div class="w-12 h-12 bg-yellow-500 rounded-full animate-bounce" style="animation-delay: 0.4s;"></div>
+            </div>
+            <button id="start-btn" class="bg-green-500 hover:bg-green-400 text-white text-3xl font-bold py-4 px-10 rounded-2xl shadow-lg border-b-8 border-green-700 active:border-b-0 active:translate-y-2 transition-all w-full">
+                PLAY!
+            </button>
+        </div>
+    </div>
+
+    <!-- End Screen -->
+    <div id="end-screen" class="absolute inset-0 bg-yellow-400/95 flex items-center justify-center z-50 hidden transition-opacity duration-500">
+        <div class="bg-white p-10 rounded-3xl shadow-2xl text-center border-8 border-yellow-500 animate-bounce-in">
+            <h1 class="game-title text-6xl text-yellow-500 mb-4">Great Job!</h1>
+            <p class="text-2xl text-gray-700 font-bold mb-6">You found all the balls!</p>
+            <div class="text-6xl mb-8">🏆🌟🎉</div>
+            <button id="restart-btn" class="bg-blue-500 hover:bg-blue-400 text-white text-2xl font-bold py-3 px-8 rounded-2xl shadow-lg border-b-6 border-blue-700 active:translate-y-1 transition-all">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Three.js Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- GSAP for smooth animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <script>
+        // --- GAME LOGIC & STATE ---
+        const tasks = [
+            { id: "on_table", instruction: "Find the ball <span class='highlight-prep'>ON</span> the brown table." },
+            { id: "under_table", instruction: "Find the ball <span class='highlight-prep'>UNDER</span> the brown table." },
+            { id: "next_to_box", instruction: "Find the ball <span class='highlight-prep'>NEXT TO</span> the blue box." },
+            { id: "behind_box", instruction: "Find the ball <span class='highlight-prep'>BEHIND</span> the blue box." },
+            { id: "in_front_of_box", instruction: "Find the ball <span class='highlight-prep'>IN FRONT OF</span> the blue box." },
+            { id: "between", instruction: "Find the ball <span class='highlight-prep'>BETWEEN</span> the brown table and the blue box." },
+            { id: "above_table", instruction: "Find the ball <span class='highlight-prep'>ABOVE</span> the white table." },
+            { id: "inside_box", instruction: "Find the ball <span class='highlight-prep'>INSIDE</span> the red basket." },
+            { id: "among_blocks", instruction: "Find the ball <span class='highlight-prep'>AMONG</span> the toy blocks." }
+        ];
+
+        let currentTaskIndex = 0;
+        let score = 0;
+        let gameActive = false;
+        let isProcessing = false;
+        let targetBalls = [];
+
+        // --- UI ELEMENTS ---
+        const startScreen = document.getElementById('start-screen');
+        const endScreen = document.getElementById('end-screen');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const instructionBox = document.getElementById('instruction-box');
+        const instructionMessage = document.getElementById('instruction-message');
+        const scoreDisplay = document.getElementById('score-display');
+        const feedbackMsg = document.getElementById('feedback-msg');
+        const controlsHint = document.getElementById('controls-hint');
+        const onScreenControls = document.getElementById('on-screen-controls');
+
+        // --- THREE.JS SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        scene.fog = new THREE.Fog(0x87CEEB, 15, 60);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.camera.left = -30;
+        dirLight.shadow.camera.right = 30;
+        dirLight.shadow.camera.top = 30;
+        dirLight.shadow.camera.bottom = -30;
+        scene.add(dirLight);
+
+        // --- ENVIRONMENT BUILDING ---
+        const materials = {
+            grass: new THREE.MeshStandardMaterial({ color: 0x7CFC00 }),
+            wood: new THREE.MeshStandardMaterial({ color: 0x8B4513 }),
+            whiteWood: new THREE.MeshStandardMaterial({ color: 0xEEEEEE }),
+            box: new THREE.MeshStandardMaterial({ color: 0x4169E1 }),
+            redBox: new THREE.MeshStandardMaterial({ color: 0xDC143C }),
+            toyBlock: new THREE.MeshStandardMaterial({ color: 0xFFD700 }),
+            ballColors: [0xFF0000, 0xFFFF00, 0xFF69B4, 0xFF8C00, 0x8A2BE2, 0x00FF00, 0x00FFFF, 0xFFFFFF, 0x333333]
+        };
+
+        // Floor
+        const floorGeo = new THREE.PlaneGeometry(150, 150);
+        const floor = new THREE.Mesh(floorGeo, materials.grass);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        function createTable(colorMat, x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            
+            const tableTopGeo = new THREE.BoxGeometry(5, 0.4, 4);
+            const tableTop = new THREE.Mesh(tableTopGeo, colorMat);
+            tableTop.position.y = 3;
+            tableTop.castShadow = true;
+            tableTop.receiveShadow = true;
+            group.add(tableTop);
+
+            const legGeo = new THREE.CylinderGeometry(0.2, 0.2, 3);
+            const legPositions = [ [-2.2, -1.7], [2.2, -1.7], [-2.2, 1.7], [2.2, 1.7] ];
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, colorMat);
+                leg.position.set(pos[0], 1.5, pos[1]);
+                leg.castShadow = true;
+                group.add(leg);
+            });
+            scene.add(group);
+        }
+
+        // 1. Brown Table (Left back)
+        createTable(materials.wood, -15, -15);
+
+        // 2. Blue Box (Right back)
+        const boxGeo = new THREE.BoxGeometry(3, 3, 3);
+        const box = new THREE.Mesh(boxGeo, materials.box);
+        box.position.set(15, 1.5, -15);
+        box.castShadow = true;
+        box.receiveShadow = true;
+        scene.add(box);
+
+        // 3. White Table (Left front)
+        createTable(materials.whiteWood, -15, 10);
+
+        // 4. Red Basket (Right front - Open top)
+        const basketGroup = new THREE.Group();
+        basketGroup.position.set(15, 1, 10);
+        const wallGeoLong = new THREE.BoxGeometry(4, 2, 0.5);
+        const wallGeoShort = new THREE.BoxGeometry(0.5, 2, 3);
+        
+        const bBack = new THREE.Mesh(wallGeoLong, materials.redBox); bBack.position.set(0, 0, -1.75); bBack.castShadow = true; basketGroup.add(bBack);
+        const bFront = new THREE.Mesh(wallGeoLong, materials.redBox); bFront.position.set(0, 0, 1.75); bFront.castShadow = true; basketGroup.add(bFront);
+        const bLeft = new THREE.Mesh(wallGeoShort, materials.redBox); bLeft.position.set(-1.75, 0, 0); bLeft.castShadow = true; basketGroup.add(bLeft);
+        const bRight = new THREE.Mesh(wallGeoShort, materials.redBox); bRight.position.set(1.75, 0, 0); bRight.castShadow = true; basketGroup.add(bRight);
+        scene.add(basketGroup);
+
+        // 5. Toy Blocks (Center front)
+        const toyGeo = new THREE.BoxGeometry(2, 2, 2);
+        const t1 = new THREE.Mesh(toyGeo, materials.toyBlock); t1.position.set(-2, 1, 10); t1.castShadow = true; scene.add(t1);
+        const t2 = new THREE.Mesh(toyGeo, materials.toyBlock); t2.position.set(2, 1, 10); t2.castShadow = true; scene.add(t2);
+        const t3 = new THREE.Mesh(toyGeo, materials.toyBlock); t3.position.set(0, 1, 7); t3.castShadow = true; scene.add(t3);
+
+        // --- DYNAMIC COLLISION BOXES ---
+        // We now define physical spaces to interact with instead of hardcoding math
+        const obstacles = [
+            // Blue Box
+            { minX: 13.5, maxX: 16.5, minZ: -16.5, maxZ: -13.5, type: 'box', yTop: 3.0, yBase: 0 },
+            
+            // Brown Table
+            { minX: -17.5, maxX: -12.5, minZ: -17.0, maxZ: -13.0, type: 'table', yTop: 3.2, yBase: 2.8 },
+            { minX: -17.6, maxX: -16.8, minZ: -17.1, maxZ: -16.3, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -13.2, maxX: -12.4, minZ: -17.1, maxZ: -16.3, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -17.6, maxX: -16.8, minZ: -13.7, maxZ: -12.9, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -13.2, maxX: -12.4, minZ: -13.7, maxZ: -12.9, type: 'solid', yTop: 2.8, yBase: 0 },
+
+            // White Table
+            { minX: -17.5, maxX: -12.5, minZ: 8.0, maxZ: 12.0, type: 'table', yTop: 3.2, yBase: 2.8 },
+            { minX: -17.6, maxX: -16.8, minZ: 7.9, maxZ: 8.7, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -13.2, maxX: -12.4, minZ: 7.9, maxZ: 8.7, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -17.6, maxX: -16.8, minZ: 11.3, maxZ: 12.1, type: 'solid', yTop: 2.8, yBase: 0 },
+            { minX: -13.2, maxX: -12.4, minZ: 11.3, maxZ: 12.1, type: 'solid', yTop: 2.8, yBase: 0 },
+
+            // Red Basket Walls
+            { minX: 13.0, maxX: 13.5, minZ: 8.0, maxZ: 12.0, type: 'solid', yTop: 2.0, yBase: 0 }, // Left
+            { minX: 16.5, maxX: 17.0, minZ: 8.0, maxZ: 12.0, type: 'solid', yTop: 2.0, yBase: 0 }, // Right
+            { minX: 13.5, maxX: 16.5, minZ: 8.0, maxZ: 8.5, type: 'solid', yTop: 2.0, yBase: 0 },  // Back
+            { minX: 13.5, maxX: 16.5, minZ: 11.5, maxZ: 12.0, type: 'solid', yTop: 2.0, yBase: 0 }, // Front
+
+            // Toy Blocks
+            { minX: -3.0, maxX: -1.0, minZ: 9.0, maxZ: 11.0, type: 'box', yTop: 2.0, yBase: 0 },
+            { minX: 1.0, maxX: 3.0, minZ: 9.0, maxZ: 11.0, type: 'box', yTop: 2.0, yBase: 0 },
+            { minX: -1.0, maxX: 1.0, minZ: 6.0, maxZ: 8.0, type: 'box', yTop: 2.0, yBase: 0 },
+        ];
+
+
+        // --- CREATE TARGET BALLS ---
+        const ballGeo = new THREE.SphereGeometry(0.6, 32, 32);
+        function createBall(id, colorHex, position) {
+            const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.2 });
+            const ball = new THREE.Mesh(ballGeo, mat);
+            ball.position.copy(position);
+            ball.castShadow = true;
+            ball.receiveShadow = true;
+            ball.userData = { id: id, isTarget: true, originalY: position.y };
+            scene.add(ball);
+            targetBalls.push(ball);
+        }
+
+        // Extremely spaced out items!
+        createBall("on_table", materials.ballColors[0], new THREE.Vector3(-15, 3.8, -15));
+        createBall("under_table", materials.ballColors[1], new THREE.Vector3(-15, 0.6, -15));
+        createBall("next_to_box", materials.ballColors[2], new THREE.Vector3(20, 0.6, -15));
+        createBall("behind_box", materials.ballColors[3], new THREE.Vector3(15, 0.6, -20));
+        createBall("in_front_of_box", materials.ballColors[4], new THREE.Vector3(15, 0.6, -10));
+        createBall("between", materials.ballColors[5], new THREE.Vector3(0, 0.6, -15));
+        createBall("above_table", materials.ballColors[6], new THREE.Vector3(-15, 5.5, 10)); // Floating high!
+        createBall("inside_box", materials.ballColors[7], new THREE.Vector3(15, 0.6, 10)); // Hidden in walls
+        createBall("among_blocks", materials.ballColors[8], new THREE.Vector3(0, 0.6, 9)); // Surrounded
+
+        // --- PLAYER SETUP ---
+        const player = new THREE.Group();
+        
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFF8C00, roughness: 0.3 });
+        const bodyGeo = new THREE.SphereGeometry(0.6, 32, 32);
+        const playerBody = new THREE.Mesh(bodyGeo, bodyMat);
+        playerBody.position.y = 0.6;
+        playerBody.castShadow = true;
+        player.add(playerBody);
+        
+        const faceMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const leftEye = new THREE.Mesh(eyeGeo, faceMat);
+        leftEye.position.set(-0.25, 0.85, -0.45);
+        const rightEye = new THREE.Mesh(eyeGeo, faceMat);
+        rightEye.position.set(0.25, 0.85, -0.45);
+        
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const pupilGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+        leftPupil.position.set(-0.25, 0.85, -0.55);
+        const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+        rightPupil.position.set(0.25, 0.85, -0.55);
+        
+        player.add(leftEye, rightEye, leftPupil, rightPupil);
+        scene.add(player);
+
+        // --- INPUT HANDLING ---
+        const inputState = { up: false, down: false, left: false, right: false, jump: false };
+
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'KeyW' || e.code === 'ArrowUp') inputState.up = true;
+            if(e.code === 'KeyS' || e.code === 'ArrowDown') inputState.down = true;
+            if(e.code === 'KeyA' || e.code === 'ArrowLeft') inputState.left = true;
+            if(e.code === 'KeyD' || e.code === 'ArrowRight') inputState.right = true;
+            if(e.code === 'Space') inputState.jump = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.code === 'KeyW' || e.code === 'ArrowUp') inputState.up = false;
+            if(e.code === 'KeyS' || e.code === 'ArrowDown') inputState.down = false;
+            if(e.code === 'KeyA' || e.code === 'ArrowLeft') inputState.left = false;
+            if(e.code === 'KeyD' || e.code === 'ArrowRight') inputState.right = false;
+            if(e.code === 'Space') inputState.jump = false;
+        });
+
+        const bindBtn = (id, key) => {
+            const btn = document.getElementById(id);
+            const press = (e) => { e.preventDefault(); inputState[key] = true; };
+            const release = (e) => { e.preventDefault(); inputState[key] = false; };
+            btn.addEventListener('touchstart', press, {passive: false});
+            btn.addEventListener('mousedown', press);
+            btn.addEventListener('touchend', release);
+            btn.addEventListener('mouseup', release);
+            btn.addEventListener('mouseleave', release);
+        };
+        bindBtn('btn-up', 'up'); bindBtn('btn-down', 'down');
+        bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
+        bindBtn('btn-jump', 'jump');
+
+        // --- GAMEPLAY LOGIC ---
+        let playerVelocityY = 0;
+        let isGrounded = true;
+        const playerSpeed = 0.25;
+        let lastWrongTime = 0;
+
+        function updatePlayer() {
+            if (!gameActive || isProcessing) return;
+
+            let dx = 0; let dz = 0;
+            if(inputState.up) dz -= 1;
+            if(inputState.down) dz += 1;
+            if(inputState.left) dx -= 1;
+            if(inputState.right) dx += 1;
+
+            const playerR = 0.5;
+
+            // Horizontal Movement and Collision
+            if(dx !== 0 || dz !== 0) {
+                const length = Math.sqrt(dx*dx + dz*dz);
+                dx = (dx/length) * playerSpeed;
+                dz = (dz/length) * playerSpeed;
+                
+                const oldX = player.position.x;
+                const oldZ = player.position.z;
+                
+                player.position.x += dx;
+                player.position.z += dz;
+                
+                let hitWall = false;
+
+                // Check collisions against all obstacles
+                for (let obs of obstacles) {
+                    const isInsideXZ = (player.position.x + playerR > obs.minX && player.position.x - playerR < obs.maxX &&
+                                        player.position.z + playerR > obs.minZ && player.position.z - playerR < obs.maxZ);
+                    if (isInsideXZ) {
+                        // Solid walls block from bottom to top
+                        if (obs.type === 'solid' && player.position.y < obs.yTop) hitWall = true;
+                        // Boxes block on the sides
+                        if (obs.type === 'box' && player.position.y < obs.yTop - 0.2) hitWall = true;
+                        // Table tops block horizontally if you are parallel to them
+                        if (obs.type === 'table' && player.position.y + 1.2 > obs.yBase && player.position.y < obs.yTop - 0.2) hitWall = true;
+                    }
+                }
+
+                if (hitWall) {
+                    player.position.x = oldX;
+                    player.position.z = oldZ;
+                } else {
+                    player.rotation.y = Math.atan2(dx, dz) + Math.PI;
+                    playerBody.rotation.z += 0.2; // Rolling effect!
+                }
+            } else {
+                // stop rolling if not moving
+            }
+
+            // Keep inside map bounds
+            player.position.x = Math.max(-28, Math.min(28, player.position.x));
+            player.position.z = Math.max(-28, Math.min(22, player.position.z));
+
+            // Jump Check - Prevent jumping if completely underneath a table
+            let canJump = isGrounded;
+            for (let obs of obstacles) {
+                if (obs.type === 'table') {
+                    if (player.position.x > obs.minX && player.position.x < obs.maxX &&
+                        player.position.z > obs.minZ && player.position.z < obs.maxZ &&
+                        player.position.y < obs.yBase) {
+                        canJump = false; 
+                    }
+                }
+            }
+
+            if(inputState.jump && canJump) {
+                playerVelocityY = 0.45; // Jump power
+                isGrounded = false;
+                
+                gsap.killTweensOf(playerBody.scale);
+                playerBody.scale.set(1, 1, 1);
+                gsap.to(playerBody.scale, { y: 1.2, x: 0.8, z: 0.8, duration: 0.2, yoyo: true, repeat: 1 });
+            }
+
+            // Gravity
+            playerVelocityY -= 0.02;
+            player.position.y += playerVelocityY;
+
+            // Vertical Collision Check (Floors, Ceilings)
+            let groundHeight = 0;
+            let hitCeiling = false;
+
+            for (let obs of obstacles) {
+                const isInsideXZ = (player.position.x + playerR > obs.minX && player.position.x - playerR < obs.maxX &&
+                                    player.position.z + playerR > obs.minZ && player.position.z - playerR < obs.maxZ);
+                if (isInsideXZ) {
+                    if (obs.type === 'box') {
+                        // Landing on top of box
+                        if (player.position.y >= obs.yTop - 0.2 && playerVelocityY <= 0) {
+                            groundHeight = Math.max(groundHeight, obs.yTop);
+                        }
+                    } else if (obs.type === 'table') {
+                        if (player.position.y < obs.yBase) {
+                            // Hitting head under table
+                            if (player.position.y + 1.2 > obs.yBase && playerVelocityY > 0) {
+                                hitCeiling = obs.yBase - 1.2;
+                            }
+                        } else if (player.position.y >= obs.yTop - 0.2 && playerVelocityY <= 0) {
+                            // Landing on top of table
+                            groundHeight = Math.max(groundHeight, obs.yTop);
+                        }
+                    }
+                }
+            }
+
+            if (hitCeiling !== false) {
+                player.position.y = hitCeiling;
+                playerVelocityY = 0;
+            }
+
+            if(player.position.y <= groundHeight) {
+                player.position.y = groundHeight;
+                playerVelocityY = 0;
+                isGrounded = true;
+            } else {
+                isGrounded = false;
+            }
+        }
+
+        function checkCollisions() {
+            if (!gameActive || isProcessing) return;
+            const currentTask = tasks[currentTaskIndex];
+            
+            targetBalls.forEach(ball => {
+                if (ball.scale.x > 0) { // Check only visible balls
+                    const dist = player.position.distanceTo(ball.position);
+                    
+                    // If player touches the ball
+                    if (dist < 1.8) {
+                        if (ball.userData.id === currentTask.id) {
+                            handleCorrect(ball);
+                        } else {
+                            handleWrong(ball);
+                        }
+                    }
+                }
+            });
+        }
+
+        function handleCorrect(obj) {
+            isProcessing = true;
+            showFeedback("Correct! 🎉", "#34D399"); // Tailwind Emerald-400
+            gsap.to(obj.scale, { x: 0, y: 0, z: 0, duration: 0.4, ease: "back.in(1.7)" });
+            
+            score++;
+            scoreDisplay.innerText = score;
+            currentTaskIndex++;
+
+            setTimeout(() => {
+                isProcessing = false;
+                if (currentTaskIndex < tasks.length) {
+                    loadTask();
+                } else {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function handleWrong(obj) {
+            const now = Date.now();
+            if (now - lastWrongTime > 1500) { // Cooldown so it doesn't spam
+                lastWrongTime = now;
+                showFeedback("Try again! ❌", "#F87171"); // Tailwind Red-400
+                
+                instructionBox.classList.remove('animate-shake');
+                void instructionBox.offsetWidth; // trigger reflow
+                instructionBox.classList.add('animate-shake');
+
+                // Bounce player backwards
+                const pushDir = player.position.clone().sub(obj.position);
+                pushDir.y = 0; // Don't launch into air
+                pushDir.normalize();
+                
+                gsap.to(player.position, {
+                    x: player.position.x + pushDir.x * 2,
+                    z: player.position.z + pushDir.z * 2,
+                    duration: 0.4,
+                    ease: "power2.out"
+                });
+            }
+        }
+
+        function showFeedback(text, color) {
+            feedbackMsg.innerText = text;
+            feedbackMsg.style.color = color;
+            feedbackMsg.style.opacity = 1;
+            gsap.fromTo(feedbackMsg, { scale: 0.5 }, { scale: 1.2, duration: 0.3, ease: "back.out(1.7)" });
+            setTimeout(() => gsap.to(feedbackMsg, { opacity: 0, scale: 0.8, duration: 0.3 }), 1200);
+        }
+
+        function animateBalls(time) {
+            targetBalls.forEach((ball, index) => {
+                ball.position.y = ball.userData.originalY + Math.sin(time * 0.003 + index) * 0.1;
+                ball.rotation.y += 0.01;
+            });
+        }
+
+        // --- GAME FLOW ---
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function startGame() {
+            startScreen.classList.add('opacity-0');
+            setTimeout(() => startScreen.classList.add('hidden'), 500);
+            
+            shuffle(tasks);
+            currentTaskIndex = 0;
+            score = 0;
+            scoreDisplay.innerText = score;
+            
+            // Reset player and balls
+            player.position.set(0, 0, 8);
+            targetBalls.forEach(ball => {
+                gsap.to(ball.scale, { x: 1, y: 1, z: 1, duration: 0.5, ease: "bounce.out" });
+            });
+
+            instructionBox.classList.remove('hidden');
+            controlsHint.classList.remove('hidden');
+            onScreenControls.classList.remove('hidden');
+            
+            loadTask();
+            gameActive = true;
+            isProcessing = false;
+        }
+
+        function loadTask() {
+            instructionMessage.innerHTML = tasks[currentTaskIndex].instruction;
+        }
+
+        function endGame() {
+            gameActive = false;
+            instructionBox.classList.add('hidden');
+            controlsHint.classList.add('hidden');
+            onScreenControls.classList.add('hidden');
+            
+            endScreen.classList.remove('hidden');
+            setTimeout(() => endScreen.classList.remove('opacity-0'), 10);
+            
+            // Spin player for victory
+            gsap.to(player.rotation, { y: player.rotation.y + Math.PI * 4, duration: 2, ease: "power1.inOut" });
+        }
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', () => {
+            endScreen.classList.add('opacity-0');
+            setTimeout(() => {
+                endScreen.classList.add('hidden');
+                startGame();
+            }, 500);
+        });
+
+        // --- RESIZE & ANIMATE LOOP ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = function() {
+            function animate(time) {
+                requestAnimationFrame(animate);
+                
+                if(gameActive) {
+                    updatePlayer();
+                    checkCollisions();
+                    animateBalls(time);
+
+                    // Camera follows player smoothly
+                    const targetCamPos = player.position.clone().add(new THREE.Vector3(0, 8, 16));
+                    camera.position.lerp(targetCamPos, 0.1);
+                    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+                } else {
+                    // Slow rotation on start/end screen
+                    camera.position.x = Math.sin(time * 0.0005) * 15;
+                    camera.position.z = Math.cos(time * 0.0005) * 15;
+                    camera.lookAt(0, 2, 0);
+                }
+
+                renderer.render(scene, camera);
+            }
+            animate(0);
+        };
+    </script>
+</body>
+</html>
